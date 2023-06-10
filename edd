@@ -1,0 +1,91 @@
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+
+public class ConversationManagerHTTPS : MonoBehaviour
+{
+    public Text responseText;
+    public InputField inputField;
+    public string apiKey; // Your OpenAI API key
+
+    private const string apiUrl = "https://api.openai.com/v1/chat/completions";
+    private HttpClient httpClient;
+
+    private void Start()
+    {
+        // Create a new HttpClient with SSL/TLS enabled
+        httpClient = new HttpClient();
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+        // Display initial message or prompt
+        DisplayResponse("Hello! How can I assist you?");
+    }
+
+    public async void OnSendMessage()
+    {
+        string userMessage = inputField.text;
+        DisplayUserMessage(userMessage);
+        string response = await SendChatRequest(userMessage);
+        DisplayResponse(response);
+        inputField.text = "";
+    }
+
+    private async Task<string> SendChatRequest(string message)
+    {
+        // Create the request object
+        var request = new
+        {
+            messages = new[] { new { role = "system", content = "You are a user" }, new { role = "user", content = message } }
+        };
+
+        // Serialize the request data
+        string requestData = JsonUtility.ToJson(request);
+
+        // Create the HTTP request
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, apiUrl);
+        httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+        httpRequest.Content = new StringContent(requestData, Encoding.UTF8, "application/json");
+
+        // Send the request and get the response
+        var httpResponse = await httpClient.SendAsync(httpRequest);
+        var responseContent = await httpResponse.Content.ReadAsStringAsync();
+
+        // Deserialize and extract the generated response
+        var responseObject = JsonUtility.FromJson<ChatResponse>(responseContent);
+        return responseObject.choices[0].message.content;
+    }
+
+    private void DisplayUserMessage(string message)
+    {
+        responseText.text += "\nUser: " + message;
+    }
+
+    private void DisplayResponse(string message)
+    {
+        responseText.text += "\nBot: " + message;
+    }
+
+    private void OnDestroy()
+    {
+        // Dispose of the HttpClient when the script is destroyed
+        httpClient.Dispose();
+    }
+
+    private class ChatResponse
+    {
+        public Choice[] choices;
+    }
+
+    private class Choice
+    {
+        public Message message;
+    }
+
+    private class Message
+    {
+        public string content;
+    }
+}
